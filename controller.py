@@ -66,10 +66,10 @@ class ControllerInput:
 
 
 inputs = [
-    ControllerInput(ButtonFunction.CONFIRM, 'Triangle', 'Y', ps4=3, xbox=3, stadia=3),
+    ControllerInput(ButtonFunction.CONFIRM, 'Triangle', 'Y', ps4=2, xbox=3, stadia=3), # PS4 Triangle is ID 2
     ControllerInput(ButtonFunction.CAM_SELECT_0, 'X', 'A', id=0), # ps4=0, xbox=0, stadia=0 implicitly via id
     ControllerInput(ButtonFunction.CAM_SELECT_1, 'O', 'B', id=1), # ps4=1, xbox=1, stadia=1 implicitly via id
-    ControllerInput(ButtonFunction.CAM_SELECT_2, 'Triangle', 'Y', ps4=3, xbox=3, stadia=3), # Same as CONFIRM
+    ControllerInput(ButtonFunction.CAM_SELECT_2, 'Triangle', 'Y', ps4=2, xbox=3, stadia=3), # Same as CONFIRM, PS4 Triangle is ID 2
     ControllerInput(AxisFunction.PAN, 'Left Stick', id=0), # L-Stick X Axis
     ControllerInput(AxisFunction.TILT, 'Left Stick', id=1), # L-Stick Y Axis
     ControllerInput(AxisFunction.ZOOM, 'Right Stick', linux=3, win=3, id=3), # R-Stick Y Axis (Stadia Axis 3)
@@ -97,7 +97,7 @@ class GameController:
         controller_name = self.joystick.get_name()
         if 'Stadia' in controller_name:
             controller_type = 'stadia'
-        elif 'Sony' in controller_name or 'PS4' in controller_name:
+        elif 'Sony' in controller_name or 'PS4' in controller_name or 'Wireless Controller' in controller_name:
             controller_type = 'ps4'
         elif 'Xbox' in controller_name:
             controller_type = 'xbox'
@@ -136,7 +136,8 @@ class GameController:
             time.sleep(0.05)
 
         event = pygame.event.get(eventtype=pygame.JOYBUTTONDOWN)[0]
-        return self._pygame_to_button[event.dict['button']]
+        button_id = event.dict['button']
+        return self._pygame_to_button[button_id]
 
     def is_button_pressed(self, button: ButtonFunction) -> bool:
         if button not in self._function_to_pygame:
