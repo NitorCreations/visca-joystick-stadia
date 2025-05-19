@@ -2,7 +2,7 @@ import time
 
 from visca_over_ip import Camera
 
-from config import ips
+from config import camera_details
 from controller import GameController, ButtonFunction
 
 
@@ -14,16 +14,16 @@ def configure(controller: GameController):
     if controller.wait_for_button_press() == ButtonFunction.CONFIRM:
         print(f'Configuring...')
 
-        for ip in ips:
-            cam = Camera(ip)
+        for cam_config in camera_details:
+            cam = Camera(cam_config['host'], cam_config['port'])
             cam.set_power(True)
             cam.close_connection()
 
-        time.sleep(20)
+        time.sleep(1) # Reduced sleep time
 
-        for ip in ips:
-            cam = Camera(ip)
-            cam.recall_preset(8)
+        for cam_config in camera_details:
+            cam = Camera(cam_config['host'], cam_config['port'])
+            # cam.recall_preset(8) # Temporarily commented out for debugging
             cam.close_connection()
 
         time.sleep(2)
@@ -38,8 +38,8 @@ def shut_down(controller: GameController, current_camera: Camera):
 
     print(f'Press {controller.get_button_name(ButtonFunction.CONFIRM)} to shut down cameras or any other button to leave them on')
     if controller.wait_for_button_press() == ButtonFunction.CONFIRM:
-        for ip in ips:
-            cam = Camera(ip)
+        for cam_config in camera_details:
+            cam = Camera(cam_config['host'], cam_config['port'])
             cam.set_power(False)
             cam.close_connection()
 

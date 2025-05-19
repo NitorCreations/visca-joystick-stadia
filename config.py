@@ -11,7 +11,10 @@ sensitivity_tables = {
     'zoom': {'joy': [0, 0.1, 1], 'cam': [0, 0, 7]},
 }
 
-ips = ['10.69.4.34', '10.69.4.35', '10.69.4.39']
+camera_details = [
+    # {'host': '10.69.4.35', 'port': 52381}, # Default VISCA port for camera 2
+    # {'host': '10.69.4.39', 'port': 52381}  # Default VISCA port for camera 3
+]
 
 
 if __name__ == '__main__':

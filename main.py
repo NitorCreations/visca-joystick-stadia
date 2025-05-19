@@ -6,7 +6,7 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 from visca_over_ip.exceptions import ViscaException
 from numpy import interp
 
-from config import ips, sensitivity_tables, Camera
+from config import camera_details, sensitivity_tables, Camera
 from startup_shutdown import shut_down, configure
 from controller import GameController, ButtonFunction, AxisFunction
 
@@ -72,7 +72,8 @@ def connect_to_camera(cam_index, current_camera=None) -> Camera:
         current_camera.pantilt(0, 0)
         current_camera.close_connection()
 
-    camera = Camera(ips[cam_index])
+    cam_config = camera_details[cam_index]
+    camera = Camera(cam_config['host'], cam_config['port'])
 
     try:
         camera.zoom(0)
@@ -85,7 +86,7 @@ def connect_to_camera(cam_index, current_camera=None) -> Camera:
 
 
 def main_loop(controller: GameController, camera: Camera):
-    invert_tilt = False
+    invert_tilt = True # Default tilt inversion preference changed
 
     while True:
         controller.refresh_connection()
@@ -118,11 +119,12 @@ def main_loop(controller: GameController, camera: Camera):
             camera.decrease_exposure_compensation()
 
         camera.pantilt(
-            pan_speed=joy_pos_to_cam_speed(controller.get_axis(AxisFunction.PAN), 'pan'),
+            pan_speed=joy_pos_to_cam_speed(controller.get_axis(AxisFunction.PAN), 'pan', invert=False), # Changed to not invert pan by default
             tilt_speed=joy_pos_to_cam_speed(controller.get_axis(AxisFunction.TILT), 'tilt', not invert_tilt)
         )
         time.sleep(0.03)
-        camera.zoom(joy_pos_to_cam_speed(controller.get_axis(AxisFunction.ZOOM), 'zoom'))
+        zoom_axis_raw = controller.get_axis(AxisFunction.ZOOM)
+        camera.zoom(joy_pos_to_cam_speed(zoom_axis_raw, 'zoom'))
 
 
 if __name__ == "__main__":

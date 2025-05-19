@@ -1,7 +1,7 @@
 import time
 from enum import Enum
 import platform
-from typing import Iterable, Dict, List, Optional, Union
+from typing import Iterable, Dict, List, Optional, Union, Any
 
 import pygame
 
@@ -37,7 +37,7 @@ class AxisFunction(Enum):
 
 
 class ControllerInput:
-    def __init__(self, function: Union[ButtonFunction, AxisFunction], label: str, xbox_label: Optional[str] = None, **pygame_button_nums):
+    def __init__(self, function: Union[ButtonFunction, AxisFunction], label: str, xbox_label: Optional[str] = None, **pygame_button_nums: Any):
         self.function = function
         self.ps_label = label
         if xbox_label:
@@ -45,32 +45,44 @@ class ControllerInput:
         else:
             self.xbox_label = label
 
-        self.pygame_button_nums = pygame_button_nums
+        self.pygame_button_nums: Dict[str, int] = pygame_button_nums
 
-    def get_pygame_button_num(self, controller_type: str) -> int:
-        keywords = [controller_type, 'linux' if LINUX else 'win']
-        keys = sorted(self.pygame_button_nums.keys(), key=lambda key: sum([keyword in key for keyword in keywords]))
-        return self.pygame_button_nums[keys[-1]]
+    def get_pygame_button_num(self, controller_type: str) -> Optional[int]:
+        os_tag = 'linux' if LINUX else 'win'
+
+        # Order of preference for keys
+        key_order = [
+            f"{controller_type}_{os_tag}",  # e.g., stadia_linux, ps4_win
+            controller_type,              # e.g., stadia, ps4
+            os_tag,                       # e.g., linux, win (OS-specific, controller-agnostic)
+            'id'                          # generic fallback
+        ]
+
+        for key_to_try in key_order:
+            if key_to_try in self.pygame_button_nums:
+                return self.pygame_button_nums[key_to_try]
+        
+        return None # No mapping found
 
 
 inputs = [
-    ControllerInput(ButtonFunction.CONFIRM, 'Triangle', 'Y', ps4=3, xbox=3),
-    ControllerInput(ButtonFunction.CAM_SELECT_0, 'X', 'A', id=0),
-    ControllerInput(ButtonFunction.CAM_SELECT_1, 'O', 'B', id=1),
-    ControllerInput(ButtonFunction.CAM_SELECT_2, 'Triangle', 'Y', ps4=3, xbox=3),
-    ControllerInput(AxisFunction.PAN, 'Left Stick', id=0),
-    ControllerInput(AxisFunction.TILT, 'Left Stick', id=1),
-    ControllerInput(AxisFunction.ZOOM, 'Right Stick', linux=4, windows=3),
-    ControllerInput(AxisFunction.BRIGHTNESS_UP, 'Right Trigger', id=5),
-    ControllerInput(AxisFunction.BRIGHTNESS_DOWN, 'Left Trigger', linux=2, windows=4),
-    ControllerInput(ButtonFunction.FOCUS_NEAR, 'Right Bumper', linux_ps4=4, win_ps4=9, xbox=5),
-    ControllerInput(ButtonFunction.FOCUS_FAR, 'Left Bumper', linux_ps4=5, win_ps4=10, xbox=4),
-    ControllerInput(ButtonFunction.PRESET_0, 'D-Pad', ps4=11),
-    ControllerInput(ButtonFunction.PRESET_1, 'D-Pad', ps4=12),
-    ControllerInput(ButtonFunction.PRESET_2, 'D-Pad', ps4=13),
-    ControllerInput(ButtonFunction.PRESET_3, 'D-Pad', ps4=14),
-    ControllerInput(ButtonFunction.EXIT, 'Options', linux_ps4=9, win_ps4=6, xbox=7),
-    ControllerInput(ButtonFunction.INVERT_TILT, 'Click L Stick', linux_ps4=10, win_ps4=7, xbox=8),
+    ControllerInput(ButtonFunction.CONFIRM, 'Triangle', 'Y', ps4=3, xbox=3, stadia=3),
+    ControllerInput(ButtonFunction.CAM_SELECT_0, 'X', 'A', id=0), # ps4=0, xbox=0, stadia=0 implicitly via id
+    ControllerInput(ButtonFunction.CAM_SELECT_1, 'O', 'B', id=1), # ps4=1, xbox=1, stadia=1 implicitly via id
+    ControllerInput(ButtonFunction.CAM_SELECT_2, 'Triangle', 'Y', ps4=3, xbox=3, stadia=3), # Same as CONFIRM
+    ControllerInput(AxisFunction.PAN, 'Left Stick', id=0), # L-Stick X Axis
+    ControllerInput(AxisFunction.TILT, 'Left Stick', id=1), # L-Stick Y Axis
+    ControllerInput(AxisFunction.ZOOM, 'Right Stick', linux=3, win=3, id=3), # R-Stick Y Axis (Stadia Axis 3)
+    ControllerInput(AxisFunction.BRIGHTNESS_UP, 'Right Trigger', id=5), # R-Trigger (Stadia Axis 5)
+    ControllerInput(AxisFunction.BRIGHTNESS_DOWN, 'Left Trigger', linux=2, win=4, stadia=4), # L-Trigger (Stadia Axis 4)
+    ControllerInput(ButtonFunction.FOCUS_NEAR, 'Right Bumper', ps4_linux=4, ps4_win=9, xbox=5, stadia=5), # R1
+    ControllerInput(ButtonFunction.FOCUS_FAR, 'Left Bumper', ps4_linux=5, ps4_win=10, xbox=4, stadia=4),   # L1
+    ControllerInput(ButtonFunction.PRESET_0, 'D-Pad', ps4=11), # PS4 D-Pad Up
+    ControllerInput(ButtonFunction.PRESET_1, 'D-Pad', ps4=12), # PS4 D-Pad Down
+    ControllerInput(ButtonFunction.PRESET_2, 'D-Pad', ps4=13), # PS4 D-Pad Left
+    ControllerInput(ButtonFunction.PRESET_3, 'D-Pad', ps4=14), # PS4 D-Pad Right
+    ControllerInput(ButtonFunction.EXIT, 'Options', ps4_linux=9, ps4_win=6, xbox=7, stadia=7), # Menu/Options
+    ControllerInput(ButtonFunction.INVERT_TILT, 'Click L Stick', ps4_linux=10, ps4_win=7, xbox=8, stadia=9), # L3
 ]
 
 class GameController:
@@ -82,18 +94,24 @@ class GameController:
         self._short_presses: List[ButtonFunction] = []
         self.last_reset_time = time.time()
 
-        if 'Sony' in self.joystick.get_name() or 'PS4' in self.joystick.get_name():
+        controller_name = self.joystick.get_name()
+        if 'Stadia' in controller_name:
+            controller_type = 'stadia'
+        elif 'Sony' in controller_name or 'PS4' in controller_name:
             controller_type = 'ps4'
-        elif 'Xbox' in self.joystick.get_name():
+        elif 'Xbox' in controller_name:
             controller_type = 'xbox'
         else:
-            raise ValueError('Controller type not supported')
+            # Fallback or raise error for truly unknown controllers
+            # For now, let's try a generic approach or raise error as before
+            raise ValueError(f"Controller type '{controller_name}' not supported or recognized.")
 
-        self._function_to_pygame: Dict[Union[AxisFunction, ButtonFunction], int] = {
-            input.function: input.get_pygame_button_num(controller_type)
-            for input in inputs
-        }
-
+        self._function_to_pygame: Dict[Union[AxisFunction, ButtonFunction], int] = {}
+        for input_obj in inputs:
+            pygame_num = input_obj.get_pygame_button_num(controller_type)
+            if pygame_num is not None:
+                self._function_to_pygame[input_obj.function] = pygame_num
+        
         self._pygame_to_button : Dict[int, ButtonFunction] = {
             value: key for key, value in self._function_to_pygame.items() if isinstance(key, ButtonFunction)
         }
@@ -121,6 +139,8 @@ class GameController:
         return self._pygame_to_button[event.dict['button']]
 
     def is_button_pressed(self, button: ButtonFunction) -> bool:
+        if button not in self._function_to_pygame:
+            return False
         return self.joystick.get_button(self._function_to_pygame[button])
 
     def get_button_presses(self) -> Iterable[ButtonFunction]:
@@ -160,15 +180,21 @@ class GameController:
         return out
 
     def get_axis(self, axis: AxisFunction) -> float:
+        if axis not in self._function_to_pygame:
+            return 0.0  # Return neutral value if axis is not mapped
         return self.joystick.get_axis(self._function_to_pygame[axis])
 
     def get_button_name(self, button: ButtonFunction) -> str:
-        for input in inputs:
-            if input.function == button:
-                if 'Xbox' in self.joystick.get_name():
-                    return input.xbox_label
-                else:
-                    return input.ps_label
+        for input_obj in inputs: # Renamed 'input' to 'input_obj' for clarity
+            if input_obj.function == button:
+                controller_name = self.joystick.get_name()
+                if 'Xbox' in controller_name or 'Stadia' in controller_name:
+                    return input_obj.xbox_label
+                # elif 'Sony' in controller_name or 'PS4' in controller_name: # ps_label is the default
+                #     return input_obj.ps_label
+                else: # Default to ps_label for PS4 or other controllers
+                    return input_obj.ps_label
+        return f"Unknown ({button.name if hasattr(button, 'name') else str(button)})" # Fallback
 
     def print_mappings(self):
         print('The left stick controls the direction (pan and tilt) of the camera, and the right stick controls zoom.')
