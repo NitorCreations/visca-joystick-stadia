@@ -56,15 +56,16 @@ var lastZoomCommand string
 
 // --- Standard DS4 Axis mapping for github.com/0xcafed00d/joystick on macOS (Typical) ---
 // This might need verification/adjustment
-// Updated based on Linux testing:
+// Mappings for macOS with DS4 via Bluetooth (6 axes)
+// This will be overridden by build tags for Linux later if needed.
 const (
-	axisLeftStickX  = 0 // Confirmed
-	axisLeftStickY  = 1 // Confirmed
-	axisL2Pressure  = 2 // L2 Trigger (was 3)
-	axisRightStickX = 3 // Right Stick X (was 2)
-	axisRightStickY = 4 // Confirmed
-	axisR2Pressure  = 5 // Confirmed
-	// Axes 6 and 7 are likely D-Pad
+	axisMacOSLeftStickX  = 0 // Pan (from Left Stick)
+	axisMacOSLeftStickY  = 1 // Tilt (from Left Stick)
+	
+	axisMacOSL2         = 2 // Reported as "Tilt Down" - L2 Trigger
+	axisMacOSRightStickX = 3 // Reported as "Zoom In/Out"
+	axisMacOSRightStickY = 4 // Reported as "Pan Left/Right" (from Right Stick)
+	axisMacOSR2         = 5 // Reported as "Does Nothing" - R2 Trigger
 )
 // Note: Button constants would also be needed if we use buttons other than L1/R1 for logging.
 // For now, focusing on axis-driven controls.
@@ -203,35 +204,56 @@ func mapJoystickTriggerToViscaZoomSpeed(pressureValue int) byte {
 func processInputsAndCamera() {
 	if cameraTCPConn == nil { return }
 
-	// Pan/Tilt Logic
-	var finalPanX, finalPanY int
+	// Pan/Tilt Logic for macOS Bluetooth
+	var finalPanInput, finalTiltInput int
 
-	// Re-enable right stick control if left stick is centered
-	leftStickActive := currentLeftStickX < -joystickAxisDeadzone || currentLeftStickX > joystickAxisDeadzone ||
-					   currentLeftStickY < -joystickAxisDeadzone || currentLeftStickY > joystickAxisDeadzone
-	rightStickActive := currentRightStickX < -joystickAxisDeadzone || currentRightStickX > joystickAxisDeadzone ||
-						currentRightStickY < -joystickAxisDeadzone || currentRightStickY > joystickAxisDeadzone
+	// Pan: Prioritize Left Stick X (axisMacOSLeftStickX), fallback to Right Stick Y (axisMacOSRightStickY)
+	leftStickXActive := currentLeftStickX < -joystickAxisDeadzone || currentLeftStickX > joystickAxisDeadzone
+	rightStickYActiveForPan := currentRightStickY < -joystickAxisDeadzone || currentRightStickY > joystickAxisDeadzone
 
-	if leftStickActive {
-		finalPanX = currentLeftStickX
-		finalPanY = currentLeftStickY
-	} else if rightStickActive {
-		finalPanX = currentRightStickX
-		finalPanY = currentRightStickY
+	if leftStickXActive {
+		finalPanInput = currentLeftStickX
+	} else if rightStickYActiveForPan {
+		finalPanInput = currentRightStickY // Using RS Y for pan
 	} else {
-		finalPanX = 0 // Center for new axis range
-		finalPanY = 0 // Center for new axis range
+		finalPanInput = 0
 	}
 
-	currentPanSpeed, currentPanDirection := mapJoystickAxisToVisca(finalPanX, viscaMaxPanSpeed, joystickAxisDeadzone)
-	currentTiltSpeed, currentTiltDirection := mapJoystickAxisToVisca(finalPanY, viscaMaxTiltSpeed, joystickAxisDeadzone)
+	// Tilt: Prioritize Left Stick Y (axisMacOSLeftStickY), L2 (axisMacOSL2) for "Tilt Down"
+	leftStickYActive := currentLeftStickY < -joystickAxisDeadzone || currentLeftStickY > joystickAxisDeadzone
+	l2ActiveForTilt := currentL2Pressure > joystickTriggerActivationThreshold // L2 is an axis, positive might mean down
+
+	if leftStickYActive {
+		finalTiltInput = currentLeftStickY
+	} else if l2ActiveForTilt {
+		// L2 (axisMacOSL2) causes "Tilt Down". mapJoystickAxisToVisca expects negative for up, positive for down.
+		// If L2 axis goes from -32768 (rest) to 32767 (pressed), we need to map this.
+		// For simplicity, if L2 is pressed, let's simulate a "down" value.
+		// This needs refinement: what's the actual range of L2?
+		// Assuming positive values from L2 mean "down" pressure.
+		// We need to scale currentL2Pressure (e.g. 0 to 32767 if it's half-axis) to a portion of the positive tilt range.
+		// For now, if L2 is active, set a fixed downward tilt input. This is a placeholder.
+		// A better way: map currentL2Pressure (e.g. -32k to 32k) to a 0-32k "downward pressure" value.
+		// If L2 is -32768 (off) to 32767 (full on), then (currentL2Pressure + 32768)/2 could be a 0-32767 value.
+		tiltPressure := (currentL2Pressure + 32768) / 2 // crude map to 0-32k range
+		if tiltPressure > joystickAxisDeadzone { // only if significantly pressed
+			finalTiltInput = tiltPressure // Use this positive value for "down"
+		} else {
+			finalTiltInput = 0
+		}
+	} else {
+		finalTiltInput = 0
+	}
+	
+	currentPanSpeed, currentPanDirection := mapJoystickAxisToVisca(finalPanInput, viscaMaxPanSpeed, joystickAxisDeadzone)
+	currentTiltSpeed, currentTiltDirection := mapJoystickAxisToVisca(finalTiltInput, viscaMaxTiltSpeed, joystickAxisDeadzone)
 
 	if currentPanDirection == 0x03 { currentPanSpeed = 0 }
 	if currentTiltDirection == 0x03 { currentTiltSpeed = 0 }
 
 	if currentPanSpeed != lastSentPanSpeed || currentTiltSpeed != lastSentTiltSpeed || currentPanDirection != lastSentPanDirection || currentTiltDirection != lastSentTiltDirection {
-		cmdHex := fmt.Sprintf("%s %02x %02x %02x %02x", cmdPanTiltDrive, currentPanSpeed, currentTiltSpeed, currentPanDirection, currentTiltDirection)
-		_, err := sendRawViscaCommand(cameraTCPConn, cmdHex, false)
+		cmdHexPT := fmt.Sprintf("%s %02x %02x %02x %02x", cmdPanTiltDrive, currentPanSpeed, currentTiltSpeed, currentPanDirection, currentTiltDirection)
+		_, err := sendRawViscaCommand(cameraTCPConn, cmdHexPT, false)
 		if err != nil {
 			log.Printf("VISCA PanTiltDrive error: %v", err)
 		} else {
@@ -242,34 +264,43 @@ func processInputsAndCamera() {
 		}
 	}
 
-	// Zoom Logic
+	// Zoom Logic for macOS Bluetooth: Right Stick X (axisMacOSRightStickX)
+	// Negative for In, Positive for Out (assumption, may need to flip)
 	var zoomSpeed byte
-	var zoomCmdPart string
+	var zoomCmdPart string // "2" for In, "3" for Out
 
-	l2ZoomSpeed := mapJoystickTriggerToViscaZoomSpeed(currentL2Pressure)
-	r2ZoomSpeed := mapJoystickTriggerToViscaZoomSpeed(currentR2Pressure)
-
-	if l2ZoomSpeed > 0 { // Zoom Out
-		zoomSpeed = l2ZoomSpeed
-		zoomCmdPart = "3" // VISCA zoom out
-	} else if r2ZoomSpeed > 0 { // Zoom In
-		zoomSpeed = r2ZoomSpeed
-		zoomCmdPart = "2" // VISCA zoom in
+	// currentRightStickX is -32768 (left) to 32767 (right)
+	if currentRightStickX < -joystickAxisDeadzone { // Assuming Left on RSX is Zoom In
+		zoomCmdPart = "2" // Zoom In
+		// Normalize: 0 (at -deadZone) to 1 (at -32768)
+		normalizedVal := float64(-currentRightStickX-joystickAxisDeadzone) / float64(32768-joystickAxisDeadzone)
+		rawSpeed := normalizedVal * float64(viscaMaxZoomSpeed-1)
+		zoomSpeed = byte(rawSpeed) + 1
+		if zoomSpeed > viscaMaxZoomSpeed { zoomSpeed = viscaMaxZoomSpeed }
+	} else if currentRightStickX > joystickAxisDeadzone { // Assuming Right on RSX is Zoom Out
+		zoomCmdPart = "3" // Zoom Out
+		// Normalize: 0 (at deadZone) to 1 (at 32767)
+		normalizedVal := float64(currentRightStickX-joystickAxisDeadzone) / float64(32767-joystickAxisDeadzone)
+		rawSpeed := normalizedVal * float64(viscaMaxZoomSpeed-1)
+		zoomSpeed = byte(rawSpeed) + 1
+		if zoomSpeed > viscaMaxZoomSpeed { zoomSpeed = viscaMaxZoomSpeed }
 	} else { // Zoom Stop
 		zoomSpeed = 0
 	}
+	
+	// R2 (axisMacOSR2) is reported as doing nothing, so not used for zoom here.
 
-	var cmdHex string
+	var cmdHexZoom string
 	if zoomSpeed > 0 {
-		cmdHex = fmt.Sprintf("%s %s%01x", cmdZoomBase, zoomCmdPart, zoomSpeed)
+		cmdHexZoom = fmt.Sprintf("%s %s%01x", cmdZoomBase, zoomCmdPart, zoomSpeed)
 	} else {
-		cmdHex = cmdZoomStop
+		cmdHexZoom = cmdZoomStop
 	}
 
-	if cmdHex != lastZoomCommand {
-		_, err := sendRawViscaCommand(cameraTCPConn, cmdHex, false)
+	if cmdHexZoom != lastZoomCommand {
+		_, err := sendRawViscaCommand(cameraTCPConn, cmdHexZoom, false)
 		if err != nil { log.Printf("VISCA Zoom error: %v", err) }
-		lastZoomCommand = cmdHex
+		lastZoomCommand = cmdHexZoom
 	}
 }
 
@@ -322,25 +353,25 @@ func main() {
 					continue
 				}
 
-				// Update global stick/trigger states
+				// Update global stick/trigger states for macOS (6-axis)
 				// Ensure AxisData has enough elements before accessing
-				if len(state.AxisData) > axisLeftStickX {
-					currentLeftStickX = state.AxisData[axisLeftStickX]
+				if len(state.AxisData) > axisMacOSLeftStickX {
+					currentLeftStickX = state.AxisData[axisMacOSLeftStickX]
 				}
-				if len(state.AxisData) > axisLeftStickY {
-					currentLeftStickY = state.AxisData[axisLeftStickY]
+				if len(state.AxisData) > axisMacOSLeftStickY {
+					currentLeftStickY = state.AxisData[axisMacOSLeftStickY]
 				}
-				if len(state.AxisData) > axisRightStickX {
-					currentRightStickX = state.AxisData[axisRightStickX]
+				if len(state.AxisData) > axisMacOSRightStickX { // Now used for Zoom
+					currentRightStickX = state.AxisData[axisMacOSRightStickX]
 				}
-				if len(state.AxisData) > axisRightStickY {
-					currentRightStickY = state.AxisData[axisRightStickY]
+				if len(state.AxisData) > axisMacOSRightStickY { // Now used for Pan
+					currentRightStickY = state.AxisData[axisMacOSRightStickY]
 				}
-				if len(state.AxisData) > axisL2Pressure {
-					currentL2Pressure = state.AxisData[axisL2Pressure]
+				if len(state.AxisData) > axisMacOSL2 { // Now used for Tilt Down
+					currentL2Pressure = state.AxisData[axisMacOSL2]
 				}
-				if len(state.AxisData) > axisR2Pressure {
-					currentR2Pressure = state.AxisData[axisR2Pressure]
+				if len(state.AxisData) > axisMacOSR2 { // Reported as does nothing
+					currentR2Pressure = state.AxisData[axisMacOSR2]
 				}
 
 				// Log all raw axis data to help with mapping
