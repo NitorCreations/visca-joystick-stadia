@@ -1,12 +1,4 @@
-github.com/byuoitav/connpool v0.4.1 h1:pYqy5iEWY18Hwub+q9wuJgzIzRA4263s9UkjQbC0x2k=
-github.com/byuoitav/connpool v0.4.1/go.mod h1:9jVn2IL91Wp6eHEymqxZ5v7zPy07FtIWp/JIfDCMGQY=
-github.com/byuoitav/visca v0.3.1 h1:fy8qlNPgq0XxfynhX2p+0wlOSIIWPNEsP0ca2fbOxLw=
-github.com/byuoitav/visca v0.3.1/go.mod h1:TkSFkIY4GQb6nlyw6g4SyJBZFDzuhT+ixD8ZEJmx7eM=
-github.com/kpeu3i/gods4 v1.0.0 h1:Yv4dBxZI3Jf2wRtDmBGvUBB7GxoqBgIZBGahegi42Qs=
-github.com/kpeu3i/gods4 v1.0.0/go.mod h1:Szzn0XfzbcZy19GDoOsnRGiF9c1KmBgWJ1px62tF6rE=
-github.com/matryer/is v1.4.0/go.mod h1:8I/i5uYgLzgsgEloJE1U6xx5HkBQpAZvepWuujKwMRU=
-github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
-github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
-github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
-github.com/stamp/hid v0.0.0-20190105143849-bc55d7d13ce1 h1:BG7MhC3qshAG6YSA1JiTFdQwXoOSmkAD9jHxfwIwcRM=
-github.com/stamp/hid v0.0.0-20190105143849-bc55d7d13ce1/go.mod h1:8a9qaZSBHmyhaqWfYpMnsvd4paEG6AGdl1TAy+gQkd4=
+github.com/0xcafed00d/joystick v1.0.1 h1:r4p2cRp4MHJWu1gArhGtumbkPxmr3tcOUTFqybEhplM=
+github.com/0xcafed00d/joystick v1.0.1/go.mod h1:gzszjNgzP6jtCAeSdC9OqPVO5rO7TJuaw4P7eAjNzx8=
+golang.org/x/sys v0.0.0-20210510120138-977fb7262007 h1:gG67DSER+11cZvqIMb8S8bt0vZtiN6xWYARwirrOSfE=
+golang.org/x/sys v0.0.0-20210510120138-977fb7262007/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
