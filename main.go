@@ -342,6 +342,17 @@ func main() {
 				if len(state.AxisData) > axisR2Pressure {
 					currentR2Pressure = state.AxisData[axisR2Pressure]
 				}
+
+				// Log all raw axis data to help with mapping
+				if len(state.AxisData) >= 8 { // Assuming at least 8 axes as reported
+					log.Printf("Raw Axes: [0]=%d [1]=%d [2]=%d [3]=%d [4]=%d [5]=%d [6]=%d [7]=%d",
+						state.AxisData[0], state.AxisData[1], state.AxisData[2], state.AxisData[3],
+						state.AxisData[4], state.AxisData[5], state.AxisData[6], state.AxisData[7])
+				} else if len(state.AxisData) > 0 { // Log whatever axes are available
+					log.Printf("Raw Axes: %v (Warning: Expected at least 8 axes, got %d)", state.AxisData, len(state.AxisData))
+				} else {
+					log.Printf("Raw Axes: No axis data received")
+				}
 				
 				// For logging buttons (example: L1 and R1)
 				// Button mapping for DS4 with this library needs to be confirmed.
